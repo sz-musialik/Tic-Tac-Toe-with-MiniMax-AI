@@ -1,5 +1,11 @@
 #include "Game.hpp"
+#include "SFML/System/Err.hpp"
+#include "SFML/System/Vector2.hpp"
+#include "SFML/Window/Event.hpp"
+#include "SFML/Window/Keyboard.hpp"
+#include "SFML/Window/Mouse.hpp"
 #include <algorithm>
+#include <exception>
 #include <iomanip>
 #include <iostream>
 #include <limits>
@@ -7,11 +13,13 @@
 
 Game::Game()
     : window(sf::VideoMode::getFullscreenModes()[0], "Tic-Tac-Toe",
-             sf::Style::Fullscreen),
-      currentState(GameState::MENU), boardSize(3), currentPlayer(Player::HUMAN),
-      winner(Player::NONE), gameEnded(false), humanFirst(true), inputString(""),
-      inputActive(false), mousePressed(false), aiThinking(false),
-      aiThinkTime(0.0) {
+             sf::Style::Default, sf::State::Fullscreen),
+      currentState(GameState::MENU), boardSize(3), menuText(font),
+      gameOverText(font), turn_text(font), turnSelectText(font),
+      inputText(font), currentPlayer(Player::HUMAN), winner(Player::NONE),
+      gameEnded(false), humanFirst(true), inputString(""), inputActive(false),
+      mousePressed(false), aiThinking(false), aiThinkTime(0.0),
+      submitButtonText(font), firstButtonText(font), secondButtonText(font) {
 
   windowWidth = window.getSize().x;
   windowHeight = window.getSize().y;
@@ -32,8 +40,9 @@ Game::~Game() {
 }
 
 bool Game::initialize() {
-  if (!font.loadFromFile("arial.ttf")) {
+  if (!font.openFromFile("arial.ttf")) {
     std::cerr << "Blad wczytywania czcionki!" << std::endl;
+    return false;
   }
 
   setupMenu();
@@ -42,35 +51,32 @@ bool Game::initialize() {
 }
 
 void Game::setupMenu() {
-  menuText.setFont(font);
   menuText.setString("Podaj rozmiar planszy:");
   menuText.setCharacterSize(48);
   menuText.setFillColor(green2);
 
   sf::FloatRect textBounds = menuText.getLocalBounds();
-  menuText.setPosition((windowWidth - textBounds.width) / 2,
-                       windowHeight * 0.2f);
+  menuText.setPosition(
+      {(windowWidth - textBounds.size.x) / 2, windowHeight * 0.2f});
 
   // Input box
   inputBox.setSize(sf::Vector2f(200, 60));
-  inputBox.setPosition((windowWidth - 200) / 2, windowHeight * 0.4f);
+  inputBox.setPosition({(windowWidth - 200) / 2, windowHeight * 0.4f});
   inputBox.setFillColor(sf::Color::White);
   inputBox.setOutlineThickness(3);
   inputBox.setOutlineColor(green1);
 
   // Input text
-  inputText.setFont(font);
   inputText.setCharacterSize(36);
   inputText.setFillColor(green2);
 
   // Submit button
   submitButton.setSize(sf::Vector2f(150, 60));
-  submitButton.setPosition((windowWidth - 150) / 2, windowHeight * 0.55f);
+  submitButton.setPosition({(windowWidth - 150) / 2, windowHeight * 0.55f});
   submitButton.setFillColor(green1);
   submitButton.setOutlineThickness(2);
   submitButton.setOutlineColor(green2);
 
-  submitButtonText.setFont(font);
   submitButtonText.setString("Start");
   submitButtonText.setCharacterSize(32);
   submitButtonText.setFillColor(background);
@@ -78,68 +84,63 @@ void Game::setupMenu() {
   sf::FloatRect buttonTextBounds = submitButtonText.getLocalBounds();
 
   submitButtonText.setPosition(
-      submitButton.getPosition().x + (150 - buttonTextBounds.width) / 2,
-      submitButton.getPosition().y + (60 - buttonTextBounds.height) / 2 -
-          buttonTextBounds.top);
+      {submitButton.getPosition().x + (150 - buttonTextBounds.size.x) / 2,
+       submitButton.getPosition().y + (60 - buttonTextBounds.size.y) / 2 -
+           buttonTextBounds.position.y});
 
   inputActive = true;
 }
 
 void Game::setupTurnSelection() {
-  turnSelectText.setFont(font);
   turnSelectText.setString("Wybor kolejki");
   turnSelectText.setCharacterSize(48);
   turnSelectText.setFillColor(green2);
 
   sf::FloatRect textBounds = turnSelectText.getLocalBounds();
-  turnSelectText.setPosition((windowWidth - textBounds.width) / 2,
-                             windowHeight * 0.3f);
+  turnSelectText.setPosition(
+      {(windowWidth - textBounds.size.x) / 2, windowHeight * 0.3f});
 
   // Przycisk (Gracz)
   firstButton.setSize(sf::Vector2f(200, 80));
-  firstButton.setPosition(windowWidth * 0.3f - 100, windowHeight * 0.5f);
+  firstButton.setPosition({windowWidth * 0.3f - 100, windowHeight * 0.5f});
   firstButton.setFillColor(green1);
   firstButton.setOutlineThickness(3);
   firstButton.setOutlineColor(green2);
 
-  firstButtonText.setFont(font);
   firstButtonText.setString("Ja zaczynam");
   firstButtonText.setCharacterSize(32);
   firstButtonText.setFillColor(background);
   sf::FloatRect firstTextBounds = firstButtonText.getLocalBounds();
   firstButtonText.setPosition(
-      firstButton.getPosition().x + (200 - firstTextBounds.width) / 2,
-      firstButton.getPosition().y + (80 - firstTextBounds.height) / 2 -
-          firstTextBounds.top);
+      {firstButton.getPosition().x + (200 - firstTextBounds.size.x) / 2,
+       firstButton.getPosition().y + (80 - firstTextBounds.size.y) / 2 -
+           firstTextBounds.position.y});
 
   // Przycisk (AI)
   secondButton.setSize(sf::Vector2f(200, 80));
-  secondButton.setPosition(windowWidth * 0.7f - 100, windowHeight * 0.5f);
+  secondButton.setPosition({windowWidth * 0.7f - 100, windowHeight * 0.5f});
   secondButton.setFillColor(red1);
   secondButton.setOutlineThickness(3);
   secondButton.setOutlineColor(red2);
 
-  secondButtonText.setFont(font);
   secondButtonText.setString("AI zaczyna");
   secondButtonText.setCharacterSize(32);
   secondButtonText.setFillColor(background);
   sf::FloatRect secondTextBounds = secondButtonText.getLocalBounds();
   secondButtonText.setPosition(
-      secondButton.getPosition().x + (200 - secondTextBounds.width) / 2,
-      secondButton.getPosition().y + (80 - secondTextBounds.height) / 2 -
-          secondTextBounds.top);
+      {secondButton.getPosition().x + (200 - secondTextBounds.size.x) / 2,
+       secondButton.getPosition().y + (80 - secondTextBounds.size.y) / 2 -
+           secondTextBounds.position.y});
 }
 
 void Game::setupGame() {
   resetBoard();
 
-  gameOverText.setFont(font);
   gameOverText.setCharacterSize(48);
 
-  turn_text.setFont(font);
   turn_text.setCharacterSize(48);
   turn_text.setFillColor(green2);
-  turn_text.setPosition(20, 20);
+  turn_text.setPosition({20, 20});
 
   float cellSize = getCellSize();
   cellShape.setSize(sf::Vector2f(cellSize - 4, cellSize - 4));
@@ -177,33 +178,34 @@ void Game::run() {
 }
 
 void Game::handleEvents() {
-  sf::Event event;
-
-  while (window.pollEvent(event)) {
-    if (event.type == sf::Event::Closed) {
+  while (const std::optional event = window.pollEvent()) {
+    if (event->is<sf::Event::Closed>()) {
       window.close();
     }
 
-    if (event.type == sf::Event::KeyPressed &&
-        event.key.code == sf::Keyboard::Escape) {
-      window.close();
+    if (const auto *keyPressed = event->getIf<sf::Event::KeyPressed>()) {
+      if (keyPressed->code == sf::Keyboard::Key::Escape) {
+        window.close();
+      }
     }
 
     switch (currentState) {
     case GameState::MENU:
-      handleMenuEvents(event);
+      handleMenuEvents(*event);
       break;
     case GameState::TURN_SELECT:
-      handleTurnSelectEvents(event);
+      handleTurnSelectEvents(*event);
       break;
     case GameState::PLAYING:
-      handleGameEvents(event);
+      handleGameEvents(*event);
       break;
     case GameState::GAME_OVER:
-      if (event.type == sf::Event::KeyPressed &&
-          event.key.code == sf::Keyboard::Space) {
-        currentState = GameState::MENU;
-        setupMenu();
+      if (const auto *keyPressed = event->getIf<sf::Event::KeyPressed>()) {
+        if (keyPressed->code == sf::Keyboard::Key::Space) {
+
+          currentState = GameState::MENU;
+          setupMenu();
+        }
       }
       break;
     }
@@ -213,46 +215,53 @@ void Game::handleEvents() {
 void Game::handleMenuEvents(const sf::Event &event) {
   handleTextInput(event);
 
-  if (event.type == sf::Event::MouseButtonPressed &&
-      event.mouseButton.button == sf::Mouse::Left) {
-    sf::Vector2i mousePos = sf::Mouse::getPosition(window);
+  if (const auto *mouseButtonPresed =
+          event.getIf<sf::Event::MouseButtonPressed>()) {
+    if (mouseButtonPresed->button == sf::Mouse::Button::Left) {
+      sf::Vector2i mousePos = sf::Mouse::getPosition(window);
 
-    if (submitButton.getGlobalBounds().contains(mousePos.x, mousePos.y)) {
-      int size = std::stoi(inputString);
+      if (submitButton.getGlobalBounds().contains(sf::Vector2f(mousePos))) {
+        try {
+          int size = std::stoi(inputString);
 
-      if (size >= 3) {
-        boardSize = size;
-        currentState = GameState::TURN_SELECT;
-        setupTurnSelection();
+          if (size >= 3) {
+            boardSize = size;
+            currentState = GameState::TURN_SELECT;
+            setupTurnSelection();
+          }
+        } catch (const std::exception &) {
+        }
       }
     }
   }
 }
 
 void Game::handleTurnSelectEvents(const sf::Event &event) {
-  if (event.type == sf::Event::MouseButtonPressed &&
-      event.mouseButton.button == sf::Mouse::Left) {
-    sf::Vector2i mousePos = sf::Mouse::getPosition(window);
+  if (const auto *mouseButtonPressed =
+          event.getIf<sf::Event::MouseButtonPressed>()) {
+    if (mouseButtonPressed->button == sf::Mouse::Button::Left) {
+      sf::Vector2i mousePos = sf::Mouse::getPosition(window);
 
-    if (firstButton.getGlobalBounds().contains(mousePos.x, mousePos.y)) {
-      humanFirst = true;
+      if (firstButton.getGlobalBounds().contains(sf::Vector2f(mousePos))) {
+        humanFirst = true;
 
-      currentPlayer = Player::HUMAN;
-      currentState = GameState::PLAYING;
+        currentPlayer = Player::HUMAN;
+        currentState = GameState::PLAYING;
 
-      setupGame();
-    }
+        setupGame();
+      }
 
-    if (secondButton.getGlobalBounds().contains(mousePos.x, mousePos.y)) {
-      humanFirst = false;
+      if (secondButton.getGlobalBounds().contains(sf::Vector2f(mousePos))) {
+        humanFirst = false;
 
-      currentPlayer = Player::AI;
-      currentState = GameState::PLAYING;
+        currentPlayer = Player::AI;
+        currentState = GameState::PLAYING;
 
-      setupGame();
+        setupGame();
 
-      aiThinking = true;
-      aiStartTime = std::chrono::steady_clock::now();
+        aiThinking = true;
+        aiStartTime = std::chrono::steady_clock::now();
+      }
     }
   }
 }
@@ -262,18 +271,18 @@ void Game::handleTextInput(const sf::Event &event) {
     return;
   }
 
-  if (event.type == sf::Event::TextEntered) {
+  if (const auto *textEntered = event.getIf<sf::Event::TextEntered>()) {
     // Backspace
-    if (event.text.unicode == 8) {
+    if (textEntered->unicode == 8) {
       if (!inputString.empty()) {
         inputString.pop_back();
       }
     }
 
     // Liczby 0 - 9
-    if (event.text.unicode >= 48 && event.text.unicode <= 57) {
+    if (textEntered->unicode >= 48 && textEntered->unicode <= 57) {
       if (inputString.length() < 2) {
-        inputString += static_cast<char>(event.text.unicode);
+        inputString += static_cast<char>(textEntered->unicode);
       }
     }
 
@@ -282,23 +291,24 @@ void Game::handleTextInput(const sf::Event &event) {
     sf::FloatRect inputTextBounds = inputText.getLocalBounds();
 
     inputText.setPosition(
-        inputBox.getPosition().x + (200 - inputTextBounds.width) / 2,
-        inputBox.getPosition().y + (60 - inputTextBounds.height) / 2 -
-            inputTextBounds.top);
+        {inputBox.getPosition().x + (200 - inputTextBounds.size.x) / 2,
+         inputBox.getPosition().y + (60 - inputTextBounds.size.y) / 2 -
+             inputTextBounds.position.y});
   }
 
-  if (event.type == sf::Event::KeyPressed &&
-      event.key.code == sf::Keyboard::Enter) {
-    try {
-      int size = std::stoi(inputString);
+  if (const auto *keyPressed = event.getIf<sf::Event::KeyPressed>()) {
+    if (keyPressed->code == sf::Keyboard::Key::Enter) {
+      try {
+        int size = std::stoi(inputString);
 
-      if (size >= 3) {
-        boardSize = size;
-        currentState = GameState::TURN_SELECT;
-        setupTurnSelection();
+        if (size >= 3) {
+          boardSize = size;
+          currentState = GameState::TURN_SELECT;
+          setupTurnSelection();
+        }
+      } catch (const std::exception &) {
+        // Niepoprawny input
       }
-    } catch (const std::exception &) {
-      // Niepoprawny input
     }
   }
 }
@@ -308,26 +318,28 @@ void Game::handleGameEvents(const sf::Event &event) {
     return;
   }
 
-  if (event.type == sf::Event::MouseButtonPressed &&
-      event.mouseButton.button == sf::Mouse::Left) {
-    sf::Vector2i mousePos = sf::Mouse::getPosition(window);
-    sf::Vector2i boardPos = getBoardPosition(mousePos);
+  if (const auto *mouseButtonPressed =
+          event.getIf<sf::Event::MouseButtonPressed>()) {
+    if (mouseButtonPressed->button == sf::Mouse::Button::Left) {
+      sf::Vector2i mousePos = sf::Mouse::getPosition(window);
+      sf::Vector2i boardPos = getBoardPosition(mousePos);
 
-    if (boardPos.x >= 0 && boardPos.x < boardSize && boardPos.y >= 0 &&
-        boardPos.y < boardSize) {
-      if (isValidMove(boardPos.y, boardPos.x)) {
-        makeMove(boardPos.y, boardPos.x, Player::HUMAN);
+      if (boardPos.x >= 0 && boardPos.x < boardSize && boardPos.y >= 0 &&
+          boardPos.y < boardSize) {
+        if (isValidMove(boardPos.y, boardPos.x)) {
+          makeMove(boardPos.y, boardPos.x, Player::HUMAN);
 
-        winner = checkWinner();
+          winner = checkWinner();
 
-        if (winner != Player::NONE || isBoardFull()) {
-          gameEnded = true;
-          currentState = GameState::GAME_OVER;
-        } else {
-          currentPlayer = Player::AI;
-          aiThinking = true;
+          if (winner != Player::NONE || isBoardFull()) {
+            gameEnded = true;
+            currentState = GameState::GAME_OVER;
+          } else {
+            currentPlayer = Player::AI;
+            aiThinking = true;
 
-          aiStartTime = std::chrono::steady_clock::now();
+            aiStartTime = std::chrono::steady_clock::now();
+          }
         }
       }
     }
@@ -437,18 +449,18 @@ void Game::renderGameOver() {
   float padding = 20;
 
   sf::RectangleShape backgroundBox;
-  backgroundBox.setSize(sf::Vector2f(textBounds.width + 2 * padding,
-                                     textBounds.height + 2 * padding));
+  backgroundBox.setSize(sf::Vector2f(textBounds.size.x + 2 * padding,
+                                     textBounds.size.y + 2 * padding));
   backgroundBox.setFillColor(backgroundColor);
   backgroundBox.setOutlineThickness(4);
   backgroundBox.setOutlineColor(outlineColor);
 
-  backgroundBox.setPosition((windowWidth - backgroundBox.getSize().x) / 2,
-                            (windowHeight - backgroundBox.getSize().y) / 2);
+  backgroundBox.setPosition({(windowWidth - backgroundBox.getSize().x) / 2,
+                             (windowHeight - backgroundBox.getSize().y) / 2});
 
   gameOverText.setPosition(
-      backgroundBox.getPosition().x - textBounds.left + padding,
-      backgroundBox.getPosition().y - textBounds.top + padding);
+      {backgroundBox.getPosition().x - textBounds.position.x + padding,
+       backgroundBox.getPosition().y - textBounds.position.y + padding});
 
   window.draw(backgroundBox);
   window.draw(gameOverText);
@@ -460,8 +472,8 @@ void Game::drawBoard() {
 
   for (int i = 0; i < boardSize; i++) {
     for (int j = 0; j < boardSize; j++) {
-      cellShape.setPosition(startPos.x + j * cellSize + 2,
-                            startPos.y + i * cellSize + 2);
+      cellShape.setPosition(
+          {startPos.x + j * cellSize + 2, startPos.y + i * cellSize + 2});
       window.draw(cellShape);
 
       if (board[i][j] != Player::NONE) {
@@ -476,9 +488,8 @@ void Game::drawSymbol(int row, int col, Player player) {
 
   sf::Vector2f startPos = getBoardStartPosition();
 
-  sf::Text symbol;
+  sf::Text symbol(font);
 
-  symbol.setFont(font);
   symbol.setCharacterSize(cellSize * 0.6f);
 
   if (player == Player::HUMAN) {
@@ -491,10 +502,10 @@ void Game::drawSymbol(int row, int col, Player player) {
 
   sf::FloatRect textBounds = symbol.getLocalBounds();
 
-  symbol.setPosition(startPos.x + col * cellSize +
-                         (cellSize - textBounds.width) / 2,
-                     startPos.y + row * cellSize +
-                         (cellSize - textBounds.height) / 2 - textBounds.top);
+  symbol.setPosition(
+      {startPos.x + col * cellSize + (cellSize - textBounds.size.x) / 2,
+       startPos.y + row * cellSize + (cellSize - textBounds.size.y) / 2 -
+           textBounds.position.y});
 
   window.draw(symbol);
 }
@@ -529,6 +540,10 @@ sf::Vector2i Game::getBoardPosition(sf::Vector2i mousePos) {
   float cellSize = getCellSize();
 
   sf::Vector2f startPos = getBoardStartPosition();
+
+  if (mousePos.x < startPos.x || mousePos.y < startPos.y) {
+    return sf::Vector2i(-1, -1);
+  }
 
   int col = (mousePos.x - startPos.x) / cellSize;
   int row = (mousePos.y - startPos.y) / cellSize;
@@ -701,7 +716,13 @@ int Game::minimax(std::vector<std::vector<Player>> &board, int depth,
   int score = evaluateBoard(board);
 
   if (score != 0 || depth >= maxDepth) {
-    return score - (isMaximizing ? depth : -depth);
+    if (score > 0)
+      return score - depth;
+
+    if (score < 0)
+      return score + depth;
+
+    return 0;
   }
 
   std::vector<std::pair<int, int>> moves = getAvailableMoves(board);
